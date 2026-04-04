@@ -3,6 +3,10 @@ import torch.nn as nn
 
 class DoubleConv(nn.Module):
     # model uses two conv + ReLU layers
+    # pipeline -- conv -> ReLU -> Conv -> ReLU
+    # Conv2d -- input sensor, bunch of learnable kernels/filters,
+    # each like a small 3x3 window, dot products, padding kernel_size
+    # keep H and W same
     def __init__(self, in_ch, out_ch):
         super().__init__()
         self.block == nn.Sequential(
@@ -15,20 +19,30 @@ class DoubleConv(nn.Module):
         def forward(self, x):
             return self.block(x)
         
+# UNets typically use 2 convs bc larger effective receptive field
+# plus fewer parameters than 1 huge conv 
 class UNet(nn.Module):
     def __init__(self, in_ch=1, out_ch=3):
         super().__init__()
 
         # encoder starts here, using DoubleConv class defined above
+        # progressively compresses the image into higher-level features
         self.enc1 = DoubleConv(in_ch, 64)
         self.enc2 = DoubleConv(64, 128)
 
+        # downsample, losing spatial detail
+        # takes 2x2 block, outputs max, halves H and W
         self.pool = nn.MaxPool2d(2)
 
         # bottleneck implementation
+        # most compressed representation (256 chan at lowest resolution)
         self.bottleneck = DoubleConv(128, 256)
 
         # decoder begins, once again using DoubleConv class
+        # expands to original size while combining info w/
+        # fine details from earlier w/ skip connections
+        # skips feed early high res features directly
+        # network can now reconstruct sharp edges/details
         self.up1 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
         self.dec1 = DoubleConv(256, 128)
 
@@ -57,4 +71,7 @@ class UNet(nn.Module):
 
         out = self.final(d2)
         return self.out_act(out)
+    
+    # PyTorch internally calls UNet.forward(x) when
+    # you call model(x), where model is a UNet()
     
