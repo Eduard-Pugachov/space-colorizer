@@ -8,7 +8,6 @@ from torchvision.utils import save_image
 from datasets.space_dataset import SpaceColorizationDataset
 from models.unet import UNet
 
-
 def load_config(path="configs/default.yaml"):
     with open(path) as f:
         return yaml.safe_load(f)
@@ -19,7 +18,7 @@ def save_samples(gray, pred, color, epoch, cfg):
     save_image(
         comparison,
         f"{cfg["sample_dir"]}/epoch_{epoch:03d}.png",
-        nrow=gray.size[0],
+        nrow=gray.size(0),
         normalize=False
     )
 
@@ -33,7 +32,7 @@ def train_one_epoch(model, loader, optimizer, loss_fn, device):
 
         prediction = model(gray)
 
-        loss = loss_fn(pred, color)
+        loss = loss_fn(prediction, color)
 
         optimizer.zero_grad()
 
@@ -62,5 +61,49 @@ def validate(model, loader, loss_fn, device):
 def main():
     cfg = load_config()
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Training on: {device}")
 
+    train_dataset = SpaceColorizationDataset(
+        list_file=cfg["train_list"],
+        root_dir=cfg["data_root"],
+        img_size=cfg["img_size"],
+        augment=True
+    )
+    val_ds = SpaceColorizationDataset(
+        list_file=cfg["train_list"],
+        root_dir=cfg["data_root"],
+        img_size=cfg["img_size"],
+        augment=False
+    )
+
+    train_loader = DataLoader(train_dataset, batch_size=cfg["batch_size"], shuffle=True, num_workers=0)
+    val_loader = DataLoader(train_dataset, batch_size=cfg["batch_size"], shuffle=False, num_workers=0)
+
+
+    model = UNet(in_ch=1, out_ch=3).to(device)
+    loss_fn = nn.L1Loss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg["lr"])
+
+    os.makedirs(cfg["checkpoint_dir"], exist_ok=True)
+    for epoch in range(1, cfg["epochs"]+1):
+        train_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
+        val_loss = validate(model, val_loader, loss_fn, device)
+        print(f"Epoch{epoch:03d} -- Train Loss: {train_loss:4f} -- Val Loss: {val_loss:.4f}")
+        torch.save(
+            model.state_dict(),
+            f"{cfg["checkpoint_dir"]}/unet_epoch{epoch:03d}.pth"
+        )
+
+        # saves a visual sample every 2 epochs
+        if epoch % 2 == 0:
+            model.eval()
+            gray_sample, color_sample = next(iter(val_loader))
+            gray_sample  = gray_sample[:4].to(device)
+            color_sample = color_sample[:4].to(device)
+            with torch.no_grad():
+                pred_sample = model(gray_sample)
+            save_samples(gray_sample, pred_sample, color_sample, epoch, cfg)
+
+    print("training complete")
+
+if __name__ == "__main__":
+    main()

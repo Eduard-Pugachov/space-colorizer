@@ -9,15 +9,15 @@ class DoubleConv(nn.Module):
     # keep H and W same
     def __init__(self, in_ch, out_ch):
         super().__init__()
-        self.block == nn.Sequential(
+        self.block = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, bias=False),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=3, padding=1, bias=False),
+            nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1, bias=False),
             nn.ReLU(inplace=True)
         )
 
-        def forward(self, x):
-            return self.block(x)
+    def forward(self, x):
+        return self.block(x)
         
 # UNets typically use 2 convs bc larger effective receptive field
 # plus fewer parameters than 1 huge conv 
@@ -43,15 +43,18 @@ class UNet(nn.Module):
         # fine details from earlier w/ skip connections
         # skips feed early high res features directly
         # network can now reconstruct sharp edges/details
-        self.up1 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
-        self.dec1 = DoubleConv(256, 128)
+        self.up1   = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.dec1  = DoubleConv(256, 128)
 
-        self.up2 = nn.Conv2d(64, out_ch, kernel_size=1)
-        self.out_act = nn.Sigmoid() 
+        self.up2   = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.dec2  = DoubleConv(128, 64)
+
+        self.final   = nn.Conv2d(64, out_ch, kernel_size=1)
+        self.out_act = nn.Sigmoid()
 
     def forward(self, x):
         # below is encoder path
-        e1 = self.encl1(x)
+        e1 = self.enc1(x)
         p1 = self.pool(e1)
 
         e2 = self.enc2(p1)
