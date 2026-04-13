@@ -98,8 +98,7 @@ def main():
     optimizer,
     mode="min",       # reduce when loss stops going down
     factor=0.5,       # multiply lr by 0.5 when triggered
-    patience=3,       # wait 3 epochs before reducing
-    verbose=True      # print when lr is reduced
+    patience=3       # wait 3 epochs before reducing
     )
 
     os.makedirs(cfg["checkpoint_dir"], exist_ok=True)
