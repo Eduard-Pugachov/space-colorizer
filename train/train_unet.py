@@ -30,14 +30,21 @@ def train_one_epoch(model, loader, optimizer, loss_fn, device):
         gray = gray.to(device)
         color = color.to(device)
 
+        #calls UNet.forward(gray)
+        #every operation is recorded in computation graph (directed, acyclic)
         prediction = model(gray)
 
         loss = loss_fn(prediction, color)
 
+        #gradients accumulate by default, so zero them
+        #always zero before backward!!
         optimizer.zero_grad()
 
+        #using chain rule in calc, pytorch walks the computation graph backwards
+        #from loss, stores partial derivative in theta.grad (backpropagation)
         loss.backward()
 
+        #Adam reads every parameter's .grad, modifies weights in place
         optimizer.step()
 
         total_loss += loss.item() * gray.size(0)
@@ -45,9 +52,12 @@ def train_one_epoch(model, loader, optimizer, loss_fn, device):
     return total_loss / len(loader.dataset)
 
 def validate(model, loader, loss_fn, device):
+    #.eval() switches some layers to inference mode, good practice
     model.eval()
     total_loss = 0.0
 
+    #tells pytorch to not build comp graph for these opers
+    #since no .backward(), we can save memory, runs up to 30% faster
     with torch.no_grad():
         for gray, color in loader:
             gray = gray.to(device)

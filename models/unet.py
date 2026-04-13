@@ -5,8 +5,8 @@ class DoubleConv(nn.Module):
     # model uses two conv + ReLU layers
     # pipeline -- conv -> ReLU -> Conv -> ReLU
     # Conv2d -- input sensor, bunch of learnable kernels/filters,
-    # each like a small 3x3 window, dot products, padding kernel_size
-    # keep H and W same
+    # each like a small 3x3 window, dot products
+    # padding of 1 pixel border around input so output stays same HxW
     def __init__(self, in_ch, out_ch):
         super().__init__()
         self.block = nn.Sequential(
