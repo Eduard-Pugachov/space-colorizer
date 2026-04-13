@@ -90,7 +90,13 @@ def main():
 
 
     model = UNet(in_ch=1, out_ch=3).to(device)
-    loss_fn = nn.L1Loss()
+    def combined_loss(pred, target):     
+        l1 = nn.L1Loss()(pred, target)
+        # MSE pushes the model harder on large color differences
+        mse = nn.MSELoss()(pred, target)
+        return l1 + 0.5 * mse
+    loss_fn = combined_loss
+    
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg["lr"])
 
     #automatically reduces lr when loss stops improving (learning rate scheduler)
