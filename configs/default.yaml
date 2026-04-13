@@ -1,11 +1,11 @@
 img_size: 256
 batch_size: 8
 lr: 0.001
-epochs: 15
+epochs: 30
 
 train_list: data/splits/train.txt
 val_list: data/splits/val.txt
-data_root: data/processed
+data_root: data/raw
 
 checkpoint_dir: outputs/checkpoints
 sample_dir: outputs/samples
