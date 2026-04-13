@@ -30,7 +30,7 @@ class SpaceColorizationDataset(Dataset):
     def __getitem__(self, idx):
         #normalize imgs to 3 channels (RGB)
         rel_path = self.paths[idx]
-        rgb_path = os.path.join(self.root, rel_path)
+        rgb_path = os.path.join(self.root, self.paths[idx])
 
         rgb = Image.open(rgb_path).convert("RGB")
 

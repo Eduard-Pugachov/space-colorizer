@@ -6,7 +6,7 @@ import torchvision
 def main():
     ds = SpaceColorizationDataset(
         list_file="data/splits/train.txt",
-        root_dir="data/processed",
+        root_dir="data/raw",
         img_size=256,
         augment=False,
     )

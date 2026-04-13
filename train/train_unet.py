@@ -93,11 +93,22 @@ def main():
     loss_fn = nn.L1Loss()
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg["lr"])
 
+    #automatically reduces lr when loss stops improving (learning rate scheduler)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer,
+    mode="min",       # reduce when loss stops going down
+    factor=0.5,       # multiply lr by 0.5 when triggered
+    patience=3,       # wait 3 epochs before reducing
+    verbose=True      # print when lr is reduced
+    )
+
     os.makedirs(cfg["checkpoint_dir"], exist_ok=True)
+
     for epoch in range(1, cfg["epochs"]+1):
         train_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
         val_loss = validate(model, val_loader, loss_fn, device)
         print(f"Epoch{epoch:03d} -- Train Loss: {train_loss:4f} -- Val Loss: {val_loss:.4f}")
+        scheduler.step(val_loss)
         torch.save(
             model.state_dict(),
             f"{cfg["checkpoint_dir"]}/unet_epoch{epoch:03d}.pth"
