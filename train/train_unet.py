@@ -71,6 +71,8 @@ def validate(model, loader, loss_fn, device):
 def main():
     cfg = load_config()
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Training on: {device}")  # add this
+    print(f"GPU: {torch.cuda.get_device_name(0) if device == 'cuda' else 'N/A'}")
 
     train_dataset = SpaceColorizationDataset(
         list_file=cfg["train_list"],
@@ -79,14 +81,14 @@ def main():
         augment=True
     )
     val_ds = SpaceColorizationDataset(
-        list_file=cfg["train_list"],
+        list_file=cfg["val_list"],
         root_dir=cfg["data_root"],
         img_size=cfg["img_size"],
         augment=False
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=cfg["batch_size"], shuffle=True, num_workers=0)
-    val_loader = DataLoader(train_dataset, batch_size=cfg["batch_size"], shuffle=False, num_workers=0)
+    train_loader = DataLoader(train_dataset, batch_size=cfg["batch_size"], shuffle=True, num_workers=0, pin_memory=True)
+    val_loader = DataLoader(val_ds, batch_size=cfg["batch_size"], shuffle=False, num_workers=0, pin_memory=True)
 
 
     model = UNet(in_ch=1, out_ch=3).to(device)
