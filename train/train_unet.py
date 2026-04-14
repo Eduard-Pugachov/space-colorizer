@@ -7,6 +7,7 @@ from torchvision.utils import save_image
 
 from datasets.space_dataset import SpaceColorizationDataset
 from models.unet import UNet
+from losses.perceptual import PerceptualLoss
 
 def load_config(path="configs/default.yaml"):
     with open(path) as f:
@@ -92,11 +93,14 @@ def main():
 
 
     model = UNet(in_ch=1, out_ch=3).to(device)
+
+    perceptual_loss_fn = PerceptualLoss().to(device)
     def combined_loss(pred, target):     
         l1 = nn.L1Loss()(pred, target)
         # MSE pushes the model harder on large color differences
         mse = nn.MSELoss()(pred, target)
-        return l1 + 0.5 * mse
+        perc = perceptual_loss_fn(pred, target)
+        return l1 + 0.5 * mse + 0.01 * perc
     loss_fn = combined_loss
     
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg["lr"])
