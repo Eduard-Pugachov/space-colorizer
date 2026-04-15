@@ -21,20 +21,18 @@ class SpaceColorizer:
             transforms.Resize((img_size,img_size)),
             transforms.ToTensor(),
         ])
-
     @torch.inference_mode()
     def colorize_pil_image(self, img: Image.Image) -> Image.Image:
-        # ensure grayscale
         
         gray = img.convert("L")
-        x = self.to_tensor(gray).unsqueeze(0).to(self.device)   # (1,1,H,W)
+        x = self.to_tensor(gray).unsqueeze(0).to(self.device)
 
-        pred = self.model(x).squeeze(0).cpu()                   # (3,H,W), [0,1]
+        pred = self.model(x).squeeze(0).cpu()
         out = transforms.ToPILImage()(pred.clamp(0, 1))
 
-        # boost saturation since model does not
-        # make colors vivid
-        out = ImageEnhance.Color(out).enhance(2.5)
-        out = ImageEnhance.Contrast(out).enhance(1.3)
+        # just make what the model predicted more visible
+        out = ImageEnhance.Color(out).enhance(2.5)      # vivid but not extreme
+        out = ImageEnhance.Contrast(out).enhance(1.1)   # slight pop
+        out = ImageEnhance.Sharpness(out).enhance(1.1)  # crisp edges
 
         return out

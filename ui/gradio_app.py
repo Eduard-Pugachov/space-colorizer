@@ -10,7 +10,7 @@ def predict(img):
     img: PIL image from gr.Image(type="pil")
     returns: PIL image (colorized)
     """
-    return colorizer.colorize_pil(img)
+    return colorizer.colorize_pil_image(img)
 
 
 demo = gr.Interface(
