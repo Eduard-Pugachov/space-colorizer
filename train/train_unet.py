@@ -91,8 +91,12 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=cfg["batch_size"], shuffle=True, num_workers=0, pin_memory=True)
     val_loader = DataLoader(val_ds, batch_size=cfg["batch_size"], shuffle=False, num_workers=0, pin_memory=True)
 
-
     model = UNet(in_ch=1, out_ch=3).to(device)
+
+    ckpt_path = "outputs/checkpoints/unet_epoch030.pth"
+    state = torch.load(ckpt_path, map_location=device)
+    model.load_state_dict(state)
+    print("Loaded checkpoint from epoch 30")
 
     perceptual_loss_fn = PerceptualLoss().to(device)
     def combined_loss(pred, target):     
@@ -100,6 +104,8 @@ def main():
         # MSE pushes the model harder on large color differences
         mse = nn.MSELoss()(pred, target)
         perc = perceptual_loss_fn(pred, target)
+        # 0.01 weight keeps perceptual loss scaled correctly relative to L1/MSE  
+        # VGG feature values are much larger numbers so it needs to be downweighted
         return l1 + 0.5 * mse + 0.01 * perc
     loss_fn = combined_loss
     
