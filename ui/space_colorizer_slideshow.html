@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="slides-format" content="viewport">
+    <title>Space Colorizer: Project Presentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @theme {
+            --color-bg: #050b18;
+            --color-bg-deep: #020611;
+            --color-surface: #0d1929;
+            --color-text: #e8f0ff;
+            --color-text-secondary: #a8bcd8;
+            --color-text-muted: #5a7499;
+            --color-accent-1: #38bdf8;
+            --color-accent-2: #818cf8;
+            --color-accent-3: #f472b6;
+            --color-glass-bg: rgba(255,255,255,0.05);
+            --color-glass-border: rgba(255,255,255,0.08);
+            --color-vignette: rgba(0,0,0,0.55);
+            --font-display: 'Instrument Serif', Georgia, serif;
+            --font-body: 'Inter', sans-serif;
+        }
+    </style>
+    <style>
+        :root {
+            --color-bg: #050b18;
+            --color-text: #e8f0ff;
+            --glow-color-rgb: 56,189,248;
+        }
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { background: var(--color-bg); margin: 0; }
+        body { font-family: 'Inter', sans-serif; color: var(--color-text); overflow: hidden; height: 100vh; width: 100vw; }
+        .deck { width: 100vw; height: 100vh; position: relative; }
+        .slide { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--color-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; transform: scale(0.95); transition: opacity 0.7s ease, transform 0.7s ease; pointer-events: none; overflow: hidden; }
+        .slide.active { opacity: 1; transform: scale(1); pointer-events: all; }
+        .slide > .content { position: relative; z-index: 2; width: 100%; max-width: 1100px; padding: clamp(1.5rem, 4vw, 4rem); }
+        .nav-controls { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; z-index: 100; background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); padding: 10px 24px; border-radius: 40px; border: 1px solid rgba(255,255,255,0.08); }
+        .nav-btn { width: 40px; height: 40px; border: none; background: rgba(255,255,255,0.05); color: #38bdf8; border-radius: 50%; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.3s; }
+        .nav-btn:hover { background: rgba(255,255,255,0.1); }
+        .slide-dots { display: flex; gap: 8px; }
+        .slide-dots .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.15); cursor: pointer; transition: background 0.3s, transform 0.3s; }
+        .slide-dots .dot.active { background: #38bdf8; transform: scale(1.3); }
+        .slide-counter { font-size: 0.75rem; color: #5a7499; min-width: 36px; text-align: center; }
+        .reveal { opacity: 0; transform: translateY(20px); }
+
+        /* Glow */
+        .text-glow { text-shadow: 0 0 20px rgba(56,189,248,0.5), 0 0 40px rgba(56,189,248,0.2); }
+        .stat-glow { text-shadow: 0 0 30px rgba(56,189,248,0.6), 0 0 60px rgba(56,189,248,0.25); }
+        @keyframes glow-pulse {
+            0%, 100% { text-shadow: 0 0 20px rgba(56,189,248,0.5), 0 0 40px rgba(56,189,248,0.2); }
+            50% { text-shadow: 0 0 35px rgba(56,189,248,0.8), 0 0 70px rgba(56,189,248,0.35); }
+        }
+        .glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
+
+        /* Gradient mesh */
+        @keyframes float-slow { 0% { transform: translate(0,0) scale(1); } 25% { transform: translate(60px,-50px) scale(1.12); } 50% { transform: translate(-40px,40px) scale(0.9); } 75% { transform: translate(50px,20px) scale(1.08); } 100% { transform: translate(0,0) scale(1); } }
+        @keyframes float-drift { 0% { transform: translate(0,0) scale(1) rotate(0deg); } 33% { transform: translate(-50px,-60px) scale(1.15) rotate(3deg); } 66% { transform: translate(40px,30px) scale(0.88) rotate(-2deg); } 100% { transform: translate(0,0) scale(1) rotate(0deg); } }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+        .gradient-mesh { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+        .blob { position: absolute; border-radius: 50%; filter: blur(90px); animation: float-slow 10s ease-in-out infinite; }
+        .blob:nth-child(2) { animation: float-drift 14s ease-in-out infinite; }
+        .blob:nth-child(3) { animation: float-slow 18s ease-in-out infinite reverse; }
+        .blob:nth-child(4) { animation: float-drift 22s ease-in-out infinite reverse; }
+
+        /* Vignette + noise */
+        .slide::before { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"); background-repeat: repeat; background-size: 256px 256px; opacity: 0.03; mix-blend-mode: overlay; }
+        .slide::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%); }
+
+        /* Bar fills */
+        .bar-fill { border-radius: 4px; height: 100%; transition: width 0.8s ease; width: 0%; }
+        .bar-track { background: rgba(255,255,255,0.06); border-radius: 4px; height: 10px; overflow: hidden; flex: 1; }
+
+        /* Loss curve */
+        .loss-line { stroke-dashoffset: 0; transition: stroke-dashoffset 1.2s ease; }
+
+        /* Timeline */
+        .timeline-line { position: absolute; left: 20px; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, #38bdf8, #818cf8); }
+        .timeline-dot { width: 14px; height: 14px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 10px rgba(56,189,248,0.6); flex-shrink: 0; }
+
+        /* Code block */
+        .code-block { background: rgba(0,0,0,0.5); border: 1px solid rgba(56,189,248,0.15); border-radius: 10px; padding: 1rem 1.25rem; font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: clamp(0.65rem, 1.1vw, 0.8rem); line-height: 1.7; color: #94a3b8; }
+        .code-kw { color: #818cf8; }
+        .code-fn { color: #38bdf8; }
+        .code-str { color: #86efac; }
+        .code-cm { color: #475569; }
+
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; } }
+    </style>
+</head>
+<body>
+
+<div class="mouse-spotlight" style="position:fixed;inset:0;z-index:99;pointer-events:none;"></div>
+
+<div class="deck">
+
+    <!-- SLIDE 1: TITLE -->
+    <div class="slide slide-1 active" data-slide="1">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:550px;height:550px;top:-120px;right:-80px;background:#38bdf8;opacity:0.12;"></div>
+            <div class="blob" style="width:350px;height:350px;bottom:-100px;left:-80px;background:#818cf8;opacity:0.10;"></div>
+            <div class="blob" style="width:220px;height:220px;top:45%;left:12%;background:#f472b6;opacity:0.08;"></div>
+        </div>
+        <canvas class="particle-canvas" style="position:absolute;inset:0;z-index:1;"></canvas>
+        <div class="content text-center">
+            <div style="font-size:100px;margin-bottom:1.25rem;animation:float 3.5s ease-in-out infinite;" class="reveal">🔭</div>
+            <h1 class="font-display reveal" style="font-size:clamp(2.8rem,6vw,4.8rem);font-weight:700;background:linear-gradient(135deg,#38bdf8,#818cf8,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:1rem;line-height:1.15;">Space Colorizer</h1>
+            <p class="reveal" style="font-size:clamp(0.85rem,1.4vw,1.1rem);color:#a8bcd8;max-width:580px;margin:0 auto 0.5rem;line-height:1.5;">A Custom U-Net Image Colorization Model built with PyTorch</p>
+            <p class="reveal" style="font-size:0.85rem;color:#38415a;letter-spacing:3px;text-transform:uppercase;">Colorizing Grayscale Astronomical Images with Deep Learning</p>
+        </div>
+    </div>
+
+    <!-- SLIDE 2: PROJECT OVERVIEW -->
+    <div class="slide slide-2" data-slide="2">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:380px;height:380px;top:-80px;right:-60px;background:#38bdf8;opacity:0.08;"></div>
+            <div class="blob" style="width:260px;height:260px;bottom:-60px;left:-40px;background:#818cf8;opacity:0.07;"></div>
+        </div>
+        <div class="content">
+            <p class="reveal" style="font-size:0.75rem;letter-spacing:5px;text-transform:uppercase;color:#38bdf8;margin-bottom:0.5rem;">The Goal</p>
+            <h2 class="font-display reveal" style="font-size:clamp(2rem,4vw,3rem);font-weight:700;margin-bottom:1.5rem;line-height:1.2;">From Grayscale to <span style="background:linear-gradient(135deg,#38bdf8,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Living Color</span></h2>
+            <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1.25rem;">
+                    <div style="font-size:1.8rem;margin-bottom:0.6rem;">🌌</div>
+                    <div style="font-weight:600;color:#e8f0ff;margin-bottom:0.4rem;font-size:0.95rem;">Objective</div>
+                    <div style="color:#a8bcd8;font-size:0.85rem;line-height:1.6;">Train a custom U-Net to predict plausible RGB colors for grayscale Hubble/ESA telescope images, built entirely from scratch as a learning project.</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1.25rem;">
+                    <div style="font-size:1.8rem;margin-bottom:0.6rem;">🛸</div>
+                    <div style="font-weight:600;color:#e8f0ff;margin-bottom:0.4rem;font-size:0.95rem;">Timeline</div>
+                    <div style="color:#a8bcd8;font-size:0.85rem;line-height:1.6;">6-week project started March 2026. Built the full stack: dataset → architecture → training pipeline → Gradio web app with space-themed UI.</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1.25rem;">
+                    <div style="font-size:1.8rem;margin-bottom:0.6rem;">🪐</div>
+                    <div style="font-weight:600;color:#e8f0ff;margin-bottom:0.4rem;font-size:0.95rem;">Learning Focus</div>
+                    <div style="color:#a8bcd8;font-size:0.85rem;line-height:1.6;">Implemented CNN blocks manually to understand convolutions, pooling, skip connections, and backpropagation below the PyTorch abstraction. A core goal was to learn the full data pipeline from start to finish when training a custom model.</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1.25rem;">
+                    <div style="font-size:1.8rem;margin-bottom:0.6rem;">⭐</div>
+                    <div style="font-weight:600;color:#e8f0ff;margin-bottom:0.4rem;font-size:0.95rem;">Stack</div>
+                    <div style="color:#a8bcd8;font-size:0.85rem;line-height:1.6;">PyTorch + uv + Gradio deployed on ASUS Zephyrus G16 with RTX 4080 Laptop GPU. Training: ~5 minutes per epoch.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 3: DATASET -->
+    <div class="slide slide-3" data-slide="3">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:320px;height:320px;top:-60px;left:-60px;background:#38bdf8;opacity:0.08;"></div>
+            <div class="blob" style="width:280px;height:280px;bottom:-50px;right:-50px;background:#f472b6;opacity:0.07;"></div>
+        </div>
+        <div class="content">
+            <p class="reveal" style="font-size:0.75rem;letter-spacing:5px;text-transform:uppercase;color:#38bdf8;margin-bottom:0.5rem;">The Data</p>
+            <h2 class="font-display reveal" style="font-size:clamp(1.8rem,3.5vw,2.6rem);font-weight:700;margin-bottom:1.5rem;">Dataset & Preprocessing</h2>
+            <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:1.5rem;">
+                <div style="background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.15);border-radius:14px;padding:1.2rem;text-align:center;">
+                    <div class="stat-glow" style="font-size:2.2rem;font-weight:800;color:#38bdf8;">1,612</div>
+                    <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:3px;color:#5a7499;margin-top:0.3rem;">Training Images</div>
+                </div>
+                <div style="background:rgba(129,140,248,0.06);border:1px solid rgba(129,140,248,0.15);border-radius:14px;padding:1.2rem;text-align:center;">
+                    <div style="font-size:2.2rem;font-weight:800;color:#818cf8;text-shadow:0 0 20px rgba(129,140,248,0.5);">403</div>
+                    <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:3px;color:#5a7499;margin-top:0.3rem;">Validation Images</div>
+                </div>
+                <div style="background:rgba(244,114,182,0.06);border:1px solid rgba(244,114,182,0.15);border-radius:14px;padding:1.2rem;text-align:center;">
+                    <div style="font-size:2.2rem;font-weight:800;color:#f472b6;text-shadow:0 0 20px rgba(244,114,182,0.5);">256×256</div>
+                    <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:3px;color:#5a7499;margin-top:0.3rem;">Pixel Resolution</div>
+                </div>
+            </div>
+            <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div style="border-left:3px solid #38bdf8;padding:0.8rem 1rem;background:rgba(255,255,255,0.03);border-radius:0 10px 10px 0;">
+                    <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.3rem;">Sources</div>
+                    <div style="color:#a8bcd8;font-size:0.82rem;line-height:1.6;">HubbleSite.org & ESA Hubble Archive, single-band filter images (inherently grayscale). Nebulae, galaxies, star fields.</div>
+                </div>
+                <div style="border-left:3px solid #818cf8;padding:0.8rem 1rem;background:rgba(255,255,255,0.03);border-radius:0 10px 10px 0;">
+                    <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.3rem;">Train/Val Split</div>
+                    <div style="color:#a8bcd8;font-size:0.82rem;line-height:1.6;">80/20 split, zero overlap verified. Grayscale/color pairs created via PIL <code style="color:#86efac;font-size:0.8rem;">img.convert("L")</code> for training targets.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 4: U-NET ARCHITECTURE -->
+    <div class="slide slide-4" data-slide="4">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:400px;height:400px;top:-80px;right:-60px;background:#818cf8;opacity:0.09;"></div>
+            <div class="blob" style="width:250px;height:250px;bottom:-50px;left:-40px;background:#38bdf8;opacity:0.07;"></div>
+        </div>
+        <div class="content">
+            <p class="reveal" style="font-size:0.75rem;letter-spacing:5px;text-transform:uppercase;color:#818cf8;margin-bottom:0.5rem;">Architecture</p>
+            <h2 class="font-display reveal" style="font-size:clamp(1.8rem,3.5vw,2.6rem);font-weight:700;margin-bottom:1.25rem;">The U-Net</h2>
+            <div class="reveal" style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:24px;align-items:start;">
+                <div>
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);border-radius:10px;padding:0.9rem 1rem;">
+                            <div style="font-weight:600;color:#38bdf8;font-size:0.88rem;margin-bottom:0.25rem;">⬇ Encoder (Contracting Path)</div>
+                            <div style="color:#a8bcd8;font-size:0.8rem;line-height:1.5;">DoubleConv blocks (2× Conv2d + BatchNorm + ReLU) → MaxPool2d. Each level doubles channels: 1 → 64 → 128 → 256 → 512. Captures "what" is in the image.</div>
+                        </div>
+                        <div style="background:rgba(129,140,248,0.08);border:1px solid rgba(129,140,248,0.2);border-radius:10px;padding:0.9rem 1rem;">
+                            <div style="font-weight:600;color:#818cf8;font-size:0.88rem;margin-bottom:0.25rem;">Skip Connections</div>
+                            <div style="color:#a8bcd8;font-size:0.8rem;line-height:1.5;">Feature maps from each encoder level are concatenated to the corresponding decoder level, preserving spatial detail (edges, textures) lost during downsampling.</div>
+                        </div>
+                        <div style="background:rgba(244,114,182,0.08);border:1px solid rgba(244,114,182,0.2);border-radius:10px;padding:0.9rem 1rem;">
+                            <div style="font-weight:600;color:#f472b6;font-size:0.88rem;margin-bottom:0.25rem;">⬆ Decoder (Expanding Path)</div>
+                            <div style="color:#a8bcd8;font-size:0.8rem;line-height:1.5;">ConvTranspose2d upsamples, halving channels each level. Final 1×1 Conv outputs 3 channels (RGB). Answers "where" colors belong.</div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="code-block">
+<span class="code-kw">class</span> <span class="code-fn">DoubleConv</span>(nn.Module):
+  <span class="code-cm"># Core building block</span>
+  <span class="code-kw">def</span> <span class="code-fn">__init__</span>(self, in_ch, out_ch):
+    <span class="code-fn">super()</span>.__init__()
+    self.net = nn.Sequential(
+      nn.Conv2d(in_ch, out_ch, 3, padding=1),
+      nn.BatchNorm2d(out_ch),
+      nn.ReLU(inplace=True),
+      nn.Conv2d(out_ch, out_ch, 3, padding=1),
+      nn.BatchNorm2d(out_ch),
+      nn.ReLU(inplace=True)
+    )
+
+<span class="code-cm"># Input: 1 ch grayscale
+# Output: 3 ch RGB</span>
+model = <span class="code-fn">UNet</span>(in_ch=<span class="code-str">1</span>, out_ch=<span class="code-str">3</span>)
+                    </div>
+                    <div style="margin-top:10px;background:rgba(255,255,255,0.03);border-radius:10px;padding:0.75rem 1rem;display:flex;justify-content:space-between;">
+                        <div style="text-align:center;">
+                            <div style="font-weight:700;color:#38bdf8;font-size:1.1rem;">7.8M</div>
+                            <div style="font-size:0.7rem;color:#5a7499;text-transform:uppercase;letter-spacing:2px;">Parameters</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-weight:700;color:#818cf8;font-size:1.1rem;">4</div>
+                            <div style="font-size:0.7rem;color:#5a7499;text-transform:uppercase;letter-spacing:2px;">Depth Levels</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-weight:700;color:#f472b6;font-size:1.1rem;">3×3</div>
+                            <div style="font-size:0.7rem;color:#5a7499;text-transform:uppercase;letter-spacing:2px;">Kernel Size</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 5: LOSS FUNCTIONS -->
+    <div class="slide slide-5" data-slide="5">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:350px;height:350px;bottom:-70px;right:-50px;background:#38bdf8;opacity:0.08;"></div>
+            <div class="blob" style="width:280px;height:280px;top:-50px;left:-40px;background:#f472b6;opacity:0.07;"></div>
+        </div>
+        <div class="content">
+            <p class="reveal" style="font-size:0.75rem;letter-spacing:5px;text-transform:uppercase;color:#f472b6;margin-bottom:0.5rem;">Training Signal</p>
+            <h2 class="font-display reveal" style="font-size:clamp(1.8rem,3.5vw,2.6rem);font-weight:700;margin-bottom:1.25rem;">Loss Functions</h2>
+            <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:1.25rem;">
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1.1rem;">
+                    <div style="font-size:1.5rem;margin-bottom:0.5rem;">📐</div>
+                    <div style="font-weight:600;color:#38bdf8;font-size:0.9rem;margin-bottom:0.4rem;">L1 Loss</div>
+                    <div style="color:#a8bcd8;font-size:0.8rem;line-height:1.55;">Mean Absolute Error. Penalizes large color deviations linearly. Robust to outliers. Weight: <span style="color:#38bdf8;font-weight:600;">1.0×</span></div>
+                </div>
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1.1rem;">
+                    <div style="font-size:1.5rem;margin-bottom:0.5rem;">📏</div>
+                    <div style="font-weight:600;color:#818cf8;font-size:0.9rem;margin-bottom:0.4rem;">MSE Loss</div>
+                    <div style="color:#a8bcd8;font-size:0.8rem;line-height:1.55;">Mean Squared Error. Squares the error, heavily penalizing large deviations. Weight: <span style="color:#818cf8;font-weight:600;">0.5×</span></div>
+                </div>
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1.1rem;">
+                    <div style="font-size:1.5rem;margin-bottom:0.5rem;">🎨</div>
+                    <div style="font-weight:600;color:#f472b6;font-size:0.9rem;margin-bottom:0.4rem;">Perceptual Loss</div>
+                    <div style="color:#a8bcd8;font-size:0.8rem;line-height:1.55;">VGG16 feature comparison, forcing texture & structure matching rather than just pixel averages. Weight: <span style="color:#f472b6;font-weight:600;">0.01×</span></div>
+                </div>
+            </div>
+            <div class="reveal" style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.12);border-radius:12px;padding:1rem 1.25rem;">
+                <div style="font-family:'Courier New',monospace;font-size:0.88rem;color:#e8f0ff;">
+                    combined_loss = <span style="color:#38bdf8;">L1</span>(pred, target) + <span style="color:#818cf8;">0.5 × MSE</span>(pred, target) + <span style="color:#f472b6;">0.01 × VGG</span>(pred, target)
+                </div>
+                <div style="margin-top:0.5rem;font-size:0.78rem;color:#5a7499;">The 0.01 VGG weight prevents the perceptual loss from overpowering pixel-level accuracy, tuned to add color vibrancy without distorting shapes.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 6: TRAINING CURVES -->
+    <div class="slide slide-6" data-slide="6">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:360px;height:360px;top:-70px;right:-60px;background:#38bdf8;opacity:0.08;"></div>
+            <div class="blob" style="width:240px;height:240px;bottom:-50px;left:-40px;background:#818cf8;opacity:0.06;"></div>
+        </div>
+        <div class="content">
+            <p class="reveal" style="font-size:0.75rem;letter-spacing:5px;text-transform:uppercase;color:#38bdf8;margin-bottom:0.5rem;">Training Results</p>
+            <h2 class="font-display reveal" style="font-size:clamp(1.8rem,3.5vw,2.6rem);font-weight:700;margin-bottom:1.25rem;">48-Epoch Training Run</h2>
+            <div class="reveal" style="display:grid;grid-template-columns:1.4fr 0.6fr;gap:24px;align-items:center;">
+                <div>
+                    <!-- SVG Loss Chart -->
+                    <svg viewBox="0 0 500 200" style="width:100%;height:auto;" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="trainGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.3"/>
+                                <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+                            </linearGradient>
+                            <linearGradient id="valGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#818cf8" stop-opacity="0.2"/>
+                                <stop offset="100%" stop-color="#818cf8" stop-opacity="0.0"/>
+                            </linearGradient>
+                        </defs>
+                        <!-- Grid -->
+                        <line x1="40" y1="10" x2="40" y2="170" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+                        <line x1="40" y1="170" x2="490" y2="170" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+                        <line x1="40" y1="10" x2="490" y2="10" stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="4,4"/>
+                        <line x1="40" y1="60" x2="490" y2="60" stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="4,4"/>
+                        <line x1="40" y1="110" x2="490" y2="110" stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="4,4"/>
+                        <!-- Y labels -->
+                        <text x="35" y="14" fill="#5a7499" font-size="9" text-anchor="end">0.35</text>
+                        <text x="35" y="64" fill="#5a7499" font-size="9" text-anchor="end">0.20</text>
+                        <text x="35" y="114" fill="#5a7499" font-size="9" text-anchor="end">0.10</text>
+                        <text x="35" y="174" fill="#5a7499" font-size="9" text-anchor="end">0.03</text>
+                        <!-- X labels -->
+                        <text x="40" y="185" fill="#5a7499" font-size="9" text-anchor="middle">1</text>
+                        <text x="188" y="185" fill="#5a7499" font-size="9" text-anchor="middle">10</text>
+                        <text x="336" y="185" fill="#5a7499" font-size="9" text-anchor="middle">20</text>
+                        <text x="490" y="185" fill="#5a7499" font-size="9" text-anchor="middle">48</text>
+                        <text x="265" y="198" fill="#5a7499" font-size="9" text-anchor="middle">Epochs</text>
+                        <!-- Train loss area -->
+                        <path d="M40,11 C80,25 120,70 160,110 C200,140 250,155 300,160 C350,163 400,165 490,167 L490,170 L40,170 Z" fill="url(#trainGrad)"/>
+                        <!-- Val loss area -->
+                        <path d="M40,27 C80,35 120,80 160,118 C200,145 250,158 300,162 C350,164 400,165 490,166 L490,170 L40,170 Z" fill="url(#valGrad)"/>
+                        <!-- Train loss line -->
+                        <path d="M40,11 C80,25 120,70 160,110 C200,140 250,155 300,160 C350,163 400,165 490,167" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round"/>
+                        <!-- Val loss line -->
+                        <path d="M40,27 C80,35 120,80 160,118 C200,145 250,158 300,162 C350,164 400,165 490,166" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-dasharray="6,3"/>
+                        <!-- Legend -->
+                        <circle cx="310" cy="25" r="4" fill="#38bdf8"/>
+                        <text x="318" y="29" fill="#a8bcd8" font-size="9">Train Loss</text>
+                        <line x1="360" y1="25" x2="375" y2="25" stroke="#818cf8" stroke-width="2" stroke-dasharray="4,2"/>
+                        <text x="380" y="29" fill="#a8bcd8" font-size="9">Val Loss</text>
+                    </svg>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div style="background:rgba(56,189,248,0.07);border:1px solid rgba(56,189,248,0.15);border-radius:12px;padding:1rem;text-align:center;">
+                        <div class="stat-glow" style="font-size:1.8rem;font-weight:800;color:#38bdf8;">10×</div>
+                        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:2px;color:#5a7499;">Loss Reduction</div>
+                        <div style="font-size:0.75rem;color:#5a7499;margin-top:0.2rem;">0.338 → 0.035</div>
+                    </div>
+                    <div style="background:rgba(129,140,248,0.07);border:1px solid rgba(129,140,248,0.15);border-radius:12px;padding:1rem;text-align:center;">
+                        <div style="font-size:1.8rem;font-weight:800;color:#818cf8;text-shadow:0 0 20px rgba(129,140,248,0.5);">0%</div>
+                        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:2px;color:#5a7499;">Overfitting</div>
+                        <div style="font-size:0.75rem;color:#5a7499;margin-top:0.2rem;">Train ≈ Val throughout</div>
+                    </div>
+                    <div style="background:rgba(244,114,182,0.07);border:1px solid rgba(244,114,182,0.15);border-radius:12px;padding:1rem;text-align:center;">
+                        <div style="font-size:1.8rem;font-weight:800;color:#f472b6;text-shadow:0 0 20px rgba(244,114,182,0.4);">~5 min</div>
+                        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:2px;color:#5a7499;">Per Epoch</div>
+                        <div style="font-size:0.75rem;color:#5a7499;margin-top:0.2rem;">RTX 4080 Laptop</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 7: THE MUTED COLOR PROBLEM + FIX -->
+    <div class="slide slide-7" data-slide="7">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:320px;height:320px;top:-60px;right:-50px;background:#f472b6;opacity:0.08;"></div>
+            <div class="blob" style="width:260px;height:260px;bottom:-50px;left:-40px;background:#38bdf8;opacity:0.06;"></div>
+        </div>
+        <div class="content">
+            <p class="reveal" style="font-size:0.75rem;letter-spacing:5px;text-transform:uppercase;color:#f472b6;margin-bottom:0.5rem;">Key Challenge</p>
+            <h2 class="font-display reveal" style="font-size:clamp(1.8rem,3.5vw,2.5rem);font-weight:700;margin-bottom:1.25rem;">The Muted Color Problem</h2>
+            <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                <div>
+                    <div style="border-left:3px solid #f472b6;padding:0.8rem 1rem;background:rgba(244,114,182,0.05);border-radius:0 10px 10px 0;margin-bottom:14px;">
+                        <div style="font-weight:600;font-size:0.9rem;color:#f472b6;margin-bottom:0.3rem;">Why It Happens</div>
+                        <div style="color:#a8bcd8;font-size:0.82rem;line-height:1.6;">L1/MSE loss pushes the model toward the statistical mean color of the training set. For Hubble images, warm dust tones dominate, so the model "plays it safe" with brownish-amber for everything.</div>
+                    </div>
+                    <div style="border-left:3px solid #f97316;padding:0.8rem 1rem;background:rgba(249,115,22,0.05);border-radius:0 10px 10px 0;margin-bottom:14px;">
+                        <div style="font-weight:600;font-size:0.9rem;color:#f97316;margin-bottom:0.3rem;">Classic ML Problem Name</div>
+                        <div style="color:#a8bcd8;font-size:0.82rem;line-height:1.6;">Called "regression to the mean" or the "color desaturation" problem that affects all pixel-wise loss colorization models. Even DeOldify and similar models struggled with this.</div>
+                    </div>
+                </div>
+                <div>
+                    <div style="border-left:3px solid #38bdf8;padding:0.8rem 1rem;background:rgba(56,189,248,0.05);border-radius:0 10px 10px 0;margin-bottom:14px;">
+                        <div style="font-weight:600;font-size:0.9rem;color:#38bdf8;margin-bottom:0.3rem;">Fix #1: Perceptual Loss (VGG16)</div>
+                        <div style="color:#a8bcd8;font-size:0.82rem;line-height:1.6;">Added VGG16 feature comparison. Forces the model to match textures and structure, not just pixel averages. Noticeably more vivid colors by epoch 35–40.</div>
+                    </div>
+                    <div style="border-left:3px solid #86efac;padding:0.8rem 1rem;background:rgba(134,239,172,0.04);border-radius:0 10px 10px 0;">
+                        <div style="font-weight:600;font-size:0.9rem;color:#86efac;margin-bottom:0.3rem;">Fix #2: Post-Processing</div>
+                        <div style="color:#a8bcd8;font-size:0.82rem;line-height:1.6;"><code style="color:#86efac;font-size:0.8rem;">Color.enhance(2.0)</code> + <code style="color:#86efac;font-size:0.8rem;">Contrast.enhance(1.2)</code> + <code style="color:#86efac;font-size:0.8rem;">Sharpness.enhance(1.3)</code>. Amplifies whatever the model predicted honestly, with no color remapping.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 8: GRADIO APP -->
+    <div class="slide slide-8" data-slide="8">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:380px;height:380px;top:-70px;left:-60px;background:#818cf8;opacity:0.09;"></div>
+            <div class="blob" style="width:260px;height:260px;bottom:-50px;right:-40px;background:#38bdf8;opacity:0.07;"></div>
+        </div>
+        <canvas class="particle-canvas-ambient" style="position:absolute;inset:0;z-index:1;"></canvas>
+        <div class="content">
+            <p class="reveal" style="font-size:0.75rem;letter-spacing:5px;text-transform:uppercase;color:#818cf8;margin-bottom:0.5rem;">The Product</p>
+            <h2 class="font-display reveal" style="font-size:clamp(1.8rem,3.5vw,2.6rem);font-weight:700;margin-bottom:1.25rem;">Gradio Web App</h2>
+            <div class="reveal" style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:24px;align-items:start;">
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:1rem;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;">
+                            <span style="font-size:1.3rem;">🖼️</span>
+                            <span style="font-weight:600;font-size:0.9rem;">Input</span>
+                        </div>
+                        <div style="color:#a8bcd8;font-size:0.82rem;line-height:1.5;">Accepts JPG/PNG grayscale telescope images. User drags &amp; drops with no resizing required. Model handles 256×256 internally.</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:1rem;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;">
+                            <span style="font-size:1.3rem;">⚡</span>
+                            <span style="font-weight:600;font-size:0.9rem;">Inference Pipeline</span>
+                        </div>
+                        <div style="color:#a8bcd8;font-size:0.82rem;line-height:1.5;"><code style="color:#86efac;font-size:0.8rem;">SpaceColorizer.colorize_pil_image()</code>, loads checkpoint, converts to tensor, runs U-Net forward pass, applies light post-processing, returns PIL image.</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:1rem;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;">
+                            <span style="font-size:1.3rem;">🎨</span>
+                            <span style="font-weight:600;font-size:0.9rem;">UI Design</span>
+                        </div>
+                        <div style="color:#a8bcd8;font-size:0.82rem;line-height:1.5;">Deep-space theme with dark background, amber accents (#c8824a), Space Mono font, frosted-glass panels, radial nebula animation in CSS.</div>
+                    </div>
+                </div>
+                <div>
+                    <div class="code-block" style="height:100%;">
+<span class="code-kw">import</span> gradio <span class="code-kw">as</span> gr
+<span class="code-kw">from</span> ui.inference <span class="code-kw">import</span> SpaceColorizer
+
+colorizer = <span class="code-fn">SpaceColorizer</span>(
+    <span class="code-str">"checkpoints/unet_epoch030.pth"</span>
+)
+
+<span class="code-kw">def</span> <span class="code-fn">predict</span>(img):
+    <span class="code-kw">if</span> img <span class="code-kw">is</span> None:
+        <span class="code-kw">return</span> None
+    <span class="code-kw">return</span> colorizer.<span class="code-fn">colorize_pil_image</span>(img)
+
+demo = gr.<span class="code-fn">Interface</span>(
+    fn=predict,
+    inputs=gr.<span class="code-fn">Image</span>(type=<span class="code-str">"pil"</span>),
+    outputs=gr.<span class="code-fn">Image</span>(type=<span class="code-str">"pil"</span>),
+    title=<span class="code-str">"Space Colorizer"</span>
+)
+demo.<span class="code-fn">launch</span>()
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 9: RESULTS + LIMITATIONS -->
+    <div class="slide slide-9" data-slide="9">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:350px;height:350px;top:-60px;right:-50px;background:#38bdf8;opacity:0.08;"></div>
+            <div class="blob" style="width:250px;height:250px;bottom:-50px;left:-40px;background:#f472b6;opacity:0.07;"></div>
+        </div>
+        <div class="content">
+            <p class="reveal" style="font-size:0.75rem;letter-spacing:5px;text-transform:uppercase;color:#38bdf8;margin-bottom:0.5rem;">Honest Assessment</p>
+            <h2 class="font-display reveal" style="font-size:clamp(1.8rem,3.5vw,2.5rem);font-weight:700;margin-bottom:1.25rem;">Results & Limitations</h2>
+            <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                <div>
+                    <div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:3px;color:#86efac;margin-bottom:10px;">✓ What Works</div>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(134,239,172,0.04);border-radius:8px;padding:0.7rem 0.9rem;">
+                            <span style="color:#86efac;font-size:1rem;flex-shrink:0;">✓</span>
+                            <span style="color:#a8bcd8;font-size:0.82rem;line-height:1.5;">Carina Nebula pillars show convincing warm amber/rust tones; the model learned real color-structure relationships</span>
+                        </div>
+                        <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(134,239,172,0.04);border-radius:8px;padding:0.7rem 0.9rem;">
+                            <span style="color:#86efac;font-size:1rem;flex-shrink:0;">✓</span>
+                            <span style="color:#a8bcd8;font-size:0.82rem;line-height:1.5;">No overfitting: train/val loss converged tightly at epoch 30 (0.035 vs 0.034)</span>
+                        </div>
+                        <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(134,239,172,0.04);border-radius:8px;padding:0.7rem 0.9rem;">
+                            <span style="color:#86efac;font-size:1rem;flex-shrink:0;">✓</span>
+                            <span style="color:#a8bcd8;font-size:0.82rem;line-height:1.5;">Ring Nebula gold/orange tones markedly improved from epoch 8 → 30</span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:3px;color:#f472b6;margin-bottom:10px;">⚠ Known Limitations</div>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(244,114,182,0.04);border-radius:8px;padding:0.7rem 0.9rem;">
+                            <span style="color:#f472b6;font-size:1rem;flex-shrink:0;">⚠</span>
+                            <span style="color:#a8bcd8;font-size:0.82rem;line-height:1.5;">Output not scientifically accurate; predicts plausible colors, not true astrophysical emission lines</span>
+                        </div>
+                        <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(244,114,182,0.04);border-radius:8px;padding:0.7rem 0.9rem;">
+                            <span style="color:#f472b6;font-size:1rem;flex-shrink:0;">⚠</span>
+                            <span style="color:#a8bcd8;font-size:0.82rem;line-height:1.5;">Dataset of 1,612 images is small; more data would significantly improve generalization on novel objects</span>
+                        </div>
+                        <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(244,114,182,0.04);border-radius:8px;padding:0.7rem 0.9rem;">
+                            <span style="color:#f472b6;font-size:1rem;flex-shrink:0;">⚠</span>
+                            <span style="color:#a8bcd8;font-size:0.82rem;line-height:1.5;">Background space defaults to amber instead of cool blue-teal; the model saw more warm nebula than cold space background in training</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 10: FUTURE DIRECTIONS -->
+    <div class="slide slide-10" data-slide="10">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:420px;height:420px;top:-90px;right:-70px;background:#818cf8;opacity:0.10;"></div>
+            <div class="blob" style="width:300px;height:300px;bottom:-60px;left:-50px;background:#38bdf8;opacity:0.08;"></div>
+            <div class="blob" style="width:200px;height:200px;top:50%;left:40%;background:#f472b6;opacity:0.06;"></div>
+        </div>
+        <canvas class="particle-canvas-ambient" style="position:absolute;inset:0;z-index:1;"></canvas>
+        <div class="content">
+            <p class="reveal" style="font-size:0.75rem;letter-spacing:5px;text-transform:uppercase;color:#818cf8;margin-bottom:0.5rem;">What's Next</p>
+            <h2 class="font-display reveal" style="font-size:clamp(1.8rem,3.5vw,2.6rem);font-weight:700;margin-bottom:1.5rem;">Future Directions</h2>
+            <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+                <div style="background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.15);border-radius:14px;padding:1.1rem;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform='translateY(0)'">
+                    <div style="font-weight:600;color:#38bdf8;font-size:0.88rem;margin-bottom:0.4rem;">Scale the Dataset</div>
+                    <div style="color:#a8bcd8;font-size:0.78rem;line-height:1.55;">Target 5,000–10,000 Hubble/JWST images. Script bulk downloads from NASA MAST archive. More data is the single biggest quality lever.</div>
+                </div>
+                <div style="background:rgba(129,140,248,0.06);border:1px solid rgba(129,140,248,0.15);border-radius:14px;padding:1.1rem;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform='translateY(0)'">
+                    <div style="font-weight:600;color:#818cf8;font-size:0.88rem;margin-bottom:0.4rem;">GAN Architecture</div>
+                    <div style="color:#a8bcd8;font-size:0.78rem;line-height:1.55;">Replace pixel loss with adversarial training (Pix2Pix or conditional GAN). Discriminator learns "what does a real Hubble image look like," eliminating color averaging.</div>
+                </div>
+                <div style="background:rgba(244,114,182,0.06);border:1px solid rgba(244,114,182,0.15);border-radius:14px;padding:1.1rem;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform='translateY(0)'">
+                    <div style="font-weight:600;color:#f472b6;font-size:0.88rem;margin-bottom:0.4rem;">Transformer Backbone</div>
+                    <div style="color:#a8bcd8;font-size:0.78rem;line-height:1.55;">Replace the CNN encoder with a Swin Transformer or ViT. Transformers capture global context, better suited for handling entire nebulae as coherent scenes.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE 11: CLOSING -->
+    <div class="slide slide-11" data-slide="11">
+        <div class="gradient-mesh">
+            <div class="blob" style="width:600px;height:600px;top:-150px;right:-100px;background:#38bdf8;opacity:0.13;"></div>
+            <div class="blob" style="width:400px;height:400px;bottom:-100px;left:-80px;background:#818cf8;opacity:0.10;"></div>
+            <div class="blob" style="width:250px;height:250px;top:40%;left:20%;background:#f472b6;opacity:0.08;"></div>
+        </div>
+        <canvas class="particle-canvas" style="position:absolute;inset:0;z-index:1;"></canvas>
+        <div class="content text-center">
+            <div style="font-size:90px;margin-bottom:1rem;animation:float 3.5s ease-in-out infinite;" class="reveal">🌌</div>
+            <h2 class="font-display reveal" style="font-size:clamp(2.2rem,5vw,4rem);font-weight:700;background:linear-gradient(135deg,#38bdf8,#818cf8,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:1rem;">The Universe Deserves Color</h2>
+            <p class="reveal" style="color:#a8bcd8;font-size:clamp(0.9rem,1.5vw,1.1rem);max-width:600px;margin:0 auto 1.5rem;line-height:1.7;">A U-Net trained on 2,015 astronomical images, 48 epochs, and the belief that even a laptop GPU can bring the cosmos to life.</p>
+            <div class="reveal" style="display:flex;justify-content:center;gap:24px;flex-wrap:wrap;">
+                <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);border-radius:30px;padding:0.5rem 1.2rem;font-size:0.82rem;color:#38bdf8;">PyTorch U-Net</div>
+                <div style="background:rgba(129,140,248,0.08);border:1px solid rgba(129,140,248,0.2);border-radius:30px;padding:0.5rem 1.2rem;font-size:0.82rem;color:#818cf8;">Perceptual Loss</div>
+                <div style="background:rgba(244,114,182,0.08);border:1px solid rgba(244,114,182,0.2);border-radius:30px;padding:0.5rem 1.2rem;font-size:0.82rem;color:#f472b6;">Gradio Web App</div>
+                <div style="background:rgba(134,239,172,0.08);border:1px solid rgba(134,239,172,0.2);border-radius:30px;padding:0.5rem 1.2rem;font-size:0.82rem;color:#86efac;">RTX 4080 Trained</div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- NAVIGATION -->
+<div class="nav-controls">
+    <button class="nav-btn" onclick="changeSlide(-1)">&#8249;</button>
+    <div class="slide-dots" id="dots"></div>
+    <button class="nav-btn" onclick="changeSlide(1)">&#8250;</button>
+    <span class="slide-counter" id="counter">1 / 11</span>
+</div>
+
+<script>
+    let current = 1;
+    const total = document.querySelectorAll('.slide').length;
+    const dotsContainer = document.getElementById('dots');
+    const counter = document.getElementById('counter');
+    for (let i = 1; i <= total; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'dot' + (i === 1 ? ' active' : '');
+        dot.onclick = () => goToSlide(i);
+        dotsContainer.appendChild(dot);
+    }
+    function goToSlide(n) {
+        const prev = document.querySelector('.slide.active');
+        const next = document.querySelector(`.slide[data-slide="${n}"]`);
+        if (prev) prev.classList.remove('active');
+        if (next) { next.classList.add('active'); animateSlide(next); }
+        current = n; updateNav();
+    }
+    function changeSlide(dir) { let next = current + dir; if (next < 1) next = total; if (next > total) next = 1; goToSlide(next); }
+    function updateNav() {
+        document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i + 1 === current));
+        counter.textContent = current + ' / ' + total;
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); changeSlide(1); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); changeSlide(-1); }
+    });
+    let touchStartX = 0;
+    document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+    document.addEventListener('touchend', (e) => { const diff = touchStartX - e.changedTouches[0].clientX; if (Math.abs(diff) > 50) changeSlide(diff > 0 ? 1 : -1); });
+
+    function animateSlide(slide) {
+        slide.querySelectorAll('.reveal').forEach((el, i) => {
+            el.style.transition = 'none';
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.offsetHeight;
+            const delay = i * 0.08;
+            el.style.transition = `opacity 0.4s ease ${delay}s, transform 0.4s ease ${delay}s`;
+            el.style.opacity = '1';
+            el.style.transform = 'translateY(0px)';
+        });
+        // Animate bar fills
+        slide.querySelectorAll('.bar-fill:not(.fill-init)').forEach((bar, i) => {
+            bar.classList.add('fill-init');
+            bar.style.width = '0%';
+            bar.style.transition = `width 0.8s ease ${i * 0.1}s`;
+            bar.offsetHeight;
+            bar.style.width = bar.dataset.width + '%';
+        });
+    }
+
+    document.addEventListener('mousemove', (e) => {
+        const spotlight = document.querySelector('.mouse-spotlight');
+        if (spotlight) {
+            spotlight.style.background = `radial-gradient(600px circle at ${e.clientX}px ${e.clientY}px, rgba(56,189,248,0.055), transparent 40%)`;
+        }
+    });
+
+    window.initParticles = function(canvas, options) {
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        canvas.width = canvas.offsetWidth || window.innerWidth;
+        canvas.height = canvas.offsetHeight || window.innerHeight;
+        const interactive = options.interactive !== false;
+        const count = options.count || (interactive ? 55 : 18);
+        let mx = -1000, my = -1000;
+        const particles = Array.from({ length: count }, () => ({
+            x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+            vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
+            size: Math.random() * 2 + 0.6, alpha: Math.random() * 0.3 + 0.08
+        }));
+        if (interactive) {
+            canvas.addEventListener('mousemove', (e) => { const rect = canvas.getBoundingClientRect(); mx = e.clientX - rect.left; my = e.clientY - rect.top; });
+            canvas.addEventListener('mouseleave', () => { mx = -1000; my = -1000; });
+        }
+        (function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                if (interactive) { const dx = p.x - mx, dy = p.y - my, dist = Math.sqrt(dx*dx+dy*dy); if (dist < 120) { const f = (120-dist)/120*2; p.vx += (dx/dist)*f*0.1; p.vy += (dy/dist)*f*0.1; } }
+                p.vx *= 0.98; p.vy *= 0.98; p.x += p.vx; p.y += p.vy;
+                if (p.x < 0) p.x = canvas.width; if (p.x > canvas.width) p.x = 0;
+                if (p.y < 0) p.y = canvas.height; if (p.y > canvas.height) p.y = 0;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fillStyle = `rgba(56,189,248,${p.alpha})`; ctx.fill();
+            });
+            requestAnimationFrame(animate);
+        })();
+    };
+    document.querySelectorAll('.particle-canvas').forEach(c => window.initParticles(c, { interactive: true, count: 55 }));
+    document.querySelectorAll('.particle-canvas-ambient').forEach(c => window.initParticles(c, { interactive: false, count: 20 }));
+
+    try { animateSlide(document.querySelector('.slide.active')); } catch(e) { console.warn(e); }
+</script>
+</body>
+</html>
