@@ -31,7 +31,7 @@ class SpaceColorizer:
         out = transforms.ToPILImage()(pred.clamp(0, 1))
 
         # just make what the model predicted more visible
-        out = ImageEnhance.Color(out).enhance(2.5)      # vivid but not extreme
+        out = ImageEnhance.Color(out).enhance(2.9)      # vivid but not extreme
         out = ImageEnhance.Contrast(out).enhance(1.1)   # slight pop
         out = ImageEnhance.Sharpness(out).enhance(1.1)  # crisp edges
 
